@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/CDCMigrationGuard/CDCMigrationGuard.csproj" />
+  <Project Path="tests/CDCMigrationGuard.Tests/CDCMigrationGuard.Tests.csproj" />
+</Solution>
