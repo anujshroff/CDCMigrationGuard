@@ -14,12 +14,20 @@ public class TextFormatter : IReportFormatter
     public static void Render(string sourceName, string destName, List<DiffResult> results)
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.Write(new Rule($"[bold]CDC Migration Diff: {Markup.Escape(sourceName)} → {Markup.Escape(destName)}[/]").LeftJustified());
+        AnsiConsole.Write(new Rule($"[bold]CDC Migration Diff[/]").LeftJustified());
+        AnsiConsole.MarkupLine($"  [dim]Source:[/]  {Markup.Escape(sourceName)}");
+        AnsiConsole.MarkupLine($"  [dim]Dest:[/]    {Markup.Escape(destName)}");
         AnsiConsole.WriteLine();
 
         if (results.Count == 0)
         {
-            AnsiConsole.MarkupLine("[green]No CDC issues detected. Migration is safe.[/]");
+            var panel = new Panel("[bold green]No CDC issues detected. Migration is safe.[/]")
+            {
+                Border = BoxBorder.Rounded,
+                BorderStyle = new Style(Color.Green),
+                Padding = new Padding(2, 0)
+            };
+            AnsiConsole.Write(panel);
             return;
         }
 
@@ -29,16 +37,24 @@ public class TextFormatter : IReportFormatter
 
         foreach (var group in grouped)
         {
-            var color = group.Key switch
+            var (color, spectreColor) = group.Key switch
             {
-                Severity.Critical => "red",
-                Severity.High => "yellow",
-                Severity.Low => "blue",
-                _ => "grey"
+                Severity.Critical => ("red", Color.Red),
+                Severity.High => ("yellow", Color.Yellow),
+                Severity.Low => ("blue", Color.Blue),
+                _ => ("grey", Color.Grey)
             };
 
-            AnsiConsole.MarkupLine($"[bold {color}]{group.Key.ToString().ToUpper()}[/]");
-            AnsiConsole.MarkupLine($"[{color}]{new string('-', group.Key.ToString().Length + 4)}[/]");
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule($"[bold {color}] {group.Key.ToString().ToUpper()} ({group.Count()}) [/]").LeftJustified().RuleStyle(color));
+
+            var table = new Table()
+                .Border(TableBorder.Simple)
+                .BorderColor(spectreColor)
+                .AddColumn(new TableColumn("[dim]Tag[/]").NoWrap())
+                .AddColumn(new TableColumn("[dim]Target[/]").NoWrap())
+                .AddColumn("[dim]Description[/]")
+                .AddColumn("[dim]Action[/]");
 
             foreach (var r in group)
             {
@@ -46,17 +62,23 @@ public class TextFormatter : IReportFormatter
                     ? $"{r.FullTableName}.{r.ColumnName}"
                     : r.FullTableName;
 
-                AnsiConsole.MarkupLine($"[{color}][[{Markup.Escape(r.Tag)}]][/] [bold]{Markup.Escape(target)}[/] — {Markup.Escape(r.Description)}");
-
+                var desc = Markup.Escape(r.Description);
                 if (!string.IsNullOrEmpty(r.Detail))
                 {
-                    foreach (var line in r.Detail.Split('\n'))
-                        AnsiConsole.MarkupLine($"  [dim]{Markup.Escape(line.TrimStart())}[/]");
+                    var detailLines = r.Detail.Split('\n')
+                        .Select(l => $"[dim]{Markup.Escape(l.TrimStart())}[/]");
+                    desc += "\n" + string.Join("\n", detailLines);
                 }
 
-                AnsiConsole.MarkupLine($"  [italic]Action: {Markup.Escape(r.Action)}[/]");
-                AnsiConsole.WriteLine();
+                table.AddRow(
+                    $"[{color}]{Markup.Escape(r.Tag)}[/]",
+                    $"[bold]{Markup.Escape(target)}[/]",
+                    desc,
+                    $"[italic]{Markup.Escape(r.Action)}[/]"
+                );
             }
+
+            AnsiConsole.Write(table);
         }
 
         // Summary
@@ -65,14 +87,34 @@ public class TextFormatter : IReportFormatter
         var low = results.Count(r => r.Severity == Severity.Low);
         var info = results.Count(r => r.Severity == Severity.Info);
 
-        AnsiConsole.Write(new Rule().LeftJustified());
-        AnsiConsole.MarkupLine(
-            $"[bold]Summary:[/] [red]{critical} critical[/], [yellow]{high} high[/], [blue]{low} low[/], [grey]{info} info[/]");
+        AnsiConsole.WriteLine();
+        var summaryTable = new Table()
+            .Border(TableBorder.Rounded)
+            .Title("[bold]Summary[/]")
+            .AddColumn(new TableColumn("[red]Critical[/]").Centered())
+            .AddColumn(new TableColumn("[yellow]High[/]").Centered())
+            .AddColumn(new TableColumn("[blue]Low[/]").Centered())
+            .AddColumn(new TableColumn("[grey]Info[/]").Centered());
+
+        summaryTable.AddRow(
+            critical > 0 ? $"[bold red]{critical}[/]" : $"[dim]{critical}[/]",
+            high > 0 ? $"[bold yellow]{high}[/]" : $"[dim]{high}[/]",
+            low > 0 ? $"[bold blue]{low}[/]" : $"[dim]{low}[/]",
+            info > 0 ? $"[grey]{info}[/]" : $"[dim]{info}[/]"
+        );
+
+        AnsiConsole.Write(summaryTable);
 
         if (critical > 0)
         {
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[bold red]⚠ Migration WILL FAIL on production if CDC is not disabled first for critical items.[/]");
+            var warning = new Panel("[bold red]Migration WILL FAIL if CDC is not disabled first for critical items.[/]")
+            {
+                Border = BoxBorder.Heavy,
+                BorderStyle = new Style(Color.Red),
+                Padding = new Padding(2, 0)
+            };
+            AnsiConsole.Write(warning);
         }
     }
 }

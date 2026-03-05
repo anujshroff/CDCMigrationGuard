@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using AnujShroff.CDCMigrationGuard.Models;
 using AnujShroff.CDCMigrationGuard.Output;
 using AnujShroff.CDCMigrationGuard.Services;
@@ -7,6 +8,15 @@ namespace AnujShroff.CDCMigrationGuard.Commands;
 
 public static class CompareCommand
 {
+    private static string ShortenConnectionString(string connStr)
+    {
+        var server = Regex.Match(connStr, @"Server\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
+        var db = Regex.Match(connStr, @"Database\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
+        if (server.Success && db.Success)
+            return $"{server.Groups[1].Value.Trim()}/{db.Groups[1].Value.Trim()}";
+        return connStr.Length > 60 ? connStr[..57] + "..." : connStr;
+    }
+
     public static async Task<int> RunAsync(
         string sourceConnStr, string destConnStr, string format, string? output)
     {
@@ -16,88 +26,95 @@ public static class CompareCommand
             var destReader = new SchemaReader(destConnStr);
             var cdcReader = new CdcMetadataReader(destConnStr);
 
-            // Step 1: Check CDC is enabled on destination
-            AnsiConsole.MarkupLine("[dim]Checking CDC status on destination...[/]");
-            if (!await cdcReader.IsCdcEnabledAsync())
+            List<CdcTrackingInfo> cdcTracking = null!;
+            List<string> allSourceTables = null!;
+            List<TableSchema> sourceSchemas = null!;
+            List<TableSchema> destSchemas = null!;
+            Dictionary<string, int> instanceCounts = null!;
+            Dictionary<string, IndexInfo?> sourceIndexes = null!;
+            Dictionary<string, IndexInfo?> destIndexes = null!;
+            List<DiffResult> results = null!;
+
+            var earlyExit = false;
+            var earlyExitCode = 0;
+
+            await AnsiConsole.Status()
+                .AutoRefresh(true)
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(Style.Parse("blue"))
+                .StartAsync("Checking CDC status on destination...", async ctx =>
             {
-                AnsiConsole.MarkupLine("[yellow]CDC is not enabled on the destination database.[/]");
-                return 1;
-            }
-
-            // Step 2: Read CDC tracking info from destination
-            AnsiConsole.MarkupLine("[dim]Reading CDC metadata from destination...[/]");
-            var cdcTracking = await cdcReader.GetTrackedTablesAsync();
-            if (cdcTracking.Count == 0)
-            {
-                AnsiConsole.MarkupLine("[yellow]No CDC-tracked tables found on destination.[/]");
-                return 0;
-            }
-
-            AnsiConsole.MarkupLine($"[dim]Found {cdcTracking.Count} CDC capture instance(s) across " +
-                $"{cdcTracking.Select(c => c.FullName).Distinct().Count()} table(s).[/]");
-
-            // Step 3: Get all table names from source (for rename/schema detection)
-            AnsiConsole.MarkupLine("[dim]Reading table list from source...[/]");
-            var allSourceTables = await sourceReader.ReadAllTableNamesAsync();
-
-            // Step 4: Read schemas for tracked tables from both source and destination
-            var trackedTableNames = cdcTracking.Select(c => c.FullName).Distinct().ToList();
-
-            AnsiConsole.MarkupLine("[dim]Reading schemas from source and destination...[/]");
-            var sourceSchemas = await sourceReader.ReadSchemasAsync(trackedTableNames);
-            var destSchemas = await destReader.ReadSchemasAsync(trackedTableNames);
-
-            // Also read source schemas for tables that might have been renamed
-            // (read schemas for all source tables that share a table name with tracked tables)
-            var trackedTableNamesOnly = cdcTracking.Select(c => c.TableName).Distinct().ToList();
-            var additionalSourceTables = allSourceTables
-                .Where(t => trackedTableNamesOnly.Any(tn =>
-                    t.Split('.').Last().Equals(tn, StringComparison.OrdinalIgnoreCase))
-                    && !trackedTableNames.Contains(t, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-            if (additionalSourceTables.Count > 0)
-            {
-                var extra = await sourceReader.ReadSchemasAsync(additionalSourceTables);
-                sourceSchemas.AddRange(extra);
-            }
-
-            // Step 5: Read capture instance counts
-            var instanceCounts = await cdcReader.GetCaptureInstanceCountsAsync();
-
-            // Step 6: Read index info for CDC-tracked indexes
-            AnsiConsole.MarkupLine("[dim]Comparing CDC indexes...[/]");
-            var sourceIndexes = new Dictionary<string, IndexInfo?>();
-            var destIndexes = new Dictionary<string, IndexInfo?>();
-
-            foreach (var cdc in cdcTracking.Where(c => c.CdcIndexName is not null))
-            {
-                var key = $"{cdc.FullName}|{cdc.CdcIndexName}";
-                if (!sourceIndexes.ContainsKey(key))
+                if (!await cdcReader.IsCdcEnabledAsync())
                 {
-                    sourceIndexes[key] = await sourceReader.ReadIndexAsync(
-                        cdc.SchemaName, cdc.TableName, cdc.CdcIndexName!);
+                    AnsiConsole.MarkupLine("[yellow]CDC is not enabled on the destination database.[/]");
+                    earlyExit = true;
+                    earlyExitCode = 1;
+                    return;
                 }
-                if (!destIndexes.ContainsKey(key))
+
+                ctx.Status("Reading CDC metadata from destination...");
+                cdcTracking = await cdcReader.GetTrackedTablesAsync();
+                if (cdcTracking.Count == 0)
                 {
-                    destIndexes[key] = await destReader.ReadIndexAsync(
-                        cdc.SchemaName, cdc.TableName, cdc.CdcIndexName!);
+                    AnsiConsole.MarkupLine("[yellow]No CDC-tracked tables found on destination.[/]");
+                    earlyExit = true;
+                    return;
                 }
-            }
 
-            // Step 7: Diff
-            AnsiConsole.MarkupLine("[dim]Comparing schemas...[/]");
-            var differ = new SchemaDiffer();
-            var results = SchemaDiffer.Compare(cdcTracking, sourceSchemas, destSchemas, allSourceTables, instanceCounts);
-            results.AddRange(SchemaDiffer.CompareIndexes(cdcTracking, sourceIndexes, destIndexes, results));
+                var tableCount = cdcTracking.Select(c => c.FullName).Distinct().Count();
+                ctx.Status($"Found {cdcTracking.Count} capture instance(s) across {tableCount} table(s). Reading schemas...");
 
-            // Sort by severity descending
-            results = [.. results.OrderByDescending(r => r.Severity).ThenBy(r => r.FullTableName)];
+                allSourceTables = await sourceReader.ReadAllTableNamesAsync();
+                var trackedTableNames = cdcTracking.Select(c => c.FullName).Distinct().ToList();
+                sourceSchemas = await sourceReader.ReadSchemasAsync(trackedTableNames);
+                destSchemas = await destReader.ReadSchemasAsync(trackedTableNames);
+
+                var trackedTableNamesOnly = cdcTracking.Select(c => c.TableName).Distinct().ToList();
+                var additionalSourceTables = allSourceTables
+                    .Where(t => trackedTableNamesOnly.Any(tn =>
+                        t.Split('.').Last().Equals(tn, StringComparison.OrdinalIgnoreCase))
+                        && !trackedTableNames.Contains(t, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                if (additionalSourceTables.Count > 0)
+                {
+                    var extra = await sourceReader.ReadSchemasAsync(additionalSourceTables);
+                    sourceSchemas.AddRange(extra);
+                }
+
+                instanceCounts = await cdcReader.GetCaptureInstanceCountsAsync();
+
+                ctx.Status("Comparing CDC indexes...");
+                sourceIndexes = new Dictionary<string, IndexInfo?>();
+                destIndexes = new Dictionary<string, IndexInfo?>();
+                foreach (var cdc in cdcTracking.Where(c => c.CdcIndexName is not null))
+                {
+                    var key = $"{cdc.FullName}|{cdc.CdcIndexName}";
+                    if (!sourceIndexes.ContainsKey(key))
+                        sourceIndexes[key] = await sourceReader.ReadIndexAsync(
+                            cdc.SchemaName, cdc.TableName, cdc.CdcIndexName!);
+                    if (!destIndexes.ContainsKey(key))
+                        destIndexes[key] = await destReader.ReadIndexAsync(
+                            cdc.SchemaName, cdc.TableName, cdc.CdcIndexName!);
+                }
+
+                ctx.Status("Comparing schemas...");
+                results = SchemaDiffer.Compare(cdcTracking, sourceSchemas, destSchemas, allSourceTables, instanceCounts);
+                results.AddRange(SchemaDiffer.CompareIndexes(cdcTracking, sourceIndexes, destIndexes, results));
+                results = [.. results.OrderByDescending(r => r.Severity).ThenBy(r => r.FullTableName)];
+            });
+
+            if (earlyExit)
+                return earlyExitCode;
+
+            // Sort by severity descending (already done above, kept for clarity)
 
             // Step 8: Output
             if (format.Equals("text", StringComparison.OrdinalIgnoreCase))
             {
                 var formatter = new TextFormatter();
-                TextFormatter.Render(sourceConnStr, destConnStr, results);
+                var shortSource = ShortenConnectionString(sourceConnStr);
+                var shortDest = ShortenConnectionString(destConnStr);
+                TextFormatter.Render(shortSource, shortDest, results);
             }
             else
             {
@@ -108,7 +125,9 @@ public static class CompareCommand
                     _ => new MarkdownFormatter()
                 };
 
-                var report = formatter.Format(sourceConnStr, destConnStr, results);
+                var shortSrc = ShortenConnectionString(sourceConnStr);
+                var shortDst = ShortenConnectionString(destConnStr);
+                var report = formatter.Format(shortSrc, shortDst, results);
 
                 if (output is not null)
                 {

@@ -178,7 +178,7 @@ public class SchemaDiffer
                 TableName = cdc.TableName,
                 Description = "CDC-tracked table missing from source (dropped or renamed)",
                 Detail = $"Capture instance: {cdc.CaptureInstance}\n  Tracked columns: {string.Join(", ", cdc.TrackedColumns)}",
-                Action = "If dropped: Disable CDC → run migration. If renamed: Disable CDC → run migration → re-enable CDC."
+                Action = "If dropped: Disable CDC → run migration.\nIf renamed: Disable CDC → run migration → re-enable CDC."
             });
         }
     }
@@ -203,7 +203,7 @@ public class SchemaDiffer
                 TableName = cdc.TableName,
                 Description = "Primary key changed",
                 Detail = $"Destination PK: ({dstPk})\n  Source PK:      ({srcPk})",
-                Action = "Disable CDC → run migration → re-enable CDC. Alert downstream consumers."
+                Action = "Disable CDC → run migration → re-enable CDC.\nAlert downstream consumers."
             });
         }
     }
