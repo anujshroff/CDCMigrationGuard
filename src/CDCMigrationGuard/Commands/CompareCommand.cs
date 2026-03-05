@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using AnujShroff.CDCMigrationGuard.Models;
 using AnujShroff.CDCMigrationGuard.Output;
 using AnujShroff.CDCMigrationGuard.Services;
@@ -7,6 +8,15 @@ namespace AnujShroff.CDCMigrationGuard.Commands;
 
 public static class CompareCommand
 {
+    private static string ShortenConnectionString(string connStr)
+    {
+        var server = Regex.Match(connStr, @"Server\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
+        var db = Regex.Match(connStr, @"Database\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
+        if (server.Success && db.Success)
+            return $"{server.Groups[1].Value.Trim()}/{db.Groups[1].Value.Trim()}";
+        return connStr.Length > 60 ? connStr[..57] + "..." : connStr;
+    }
+
     public static async Task<int> RunAsync(
         string sourceConnStr, string destConnStr, string format, string? output)
     {
@@ -102,7 +112,9 @@ public static class CompareCommand
             if (format.Equals("text", StringComparison.OrdinalIgnoreCase))
             {
                 var formatter = new TextFormatter();
-                TextFormatter.Render(sourceConnStr, destConnStr, results);
+                var shortSource = ShortenConnectionString(sourceConnStr);
+                var shortDest = ShortenConnectionString(destConnStr);
+                TextFormatter.Render(shortSource, shortDest, results);
             }
             else
             {
@@ -113,7 +125,9 @@ public static class CompareCommand
                     _ => new MarkdownFormatter()
                 };
 
-                var report = formatter.Format(sourceConnStr, destConnStr, results);
+                var shortSrc = ShortenConnectionString(sourceConnStr);
+                var shortDst = ShortenConnectionString(destConnStr);
+                var report = formatter.Format(shortSrc, shortDst, results);
 
                 if (output is not null)
                 {

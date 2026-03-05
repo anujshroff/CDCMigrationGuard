@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using AnujShroff.CDCMigrationGuard.Models;
 using Spectre.Console;
 
@@ -12,24 +11,12 @@ public class TextFormatter : IReportFormatter
         return string.Empty; // Not used — we render directly
     }
 
-    private static string ShortenConnectionString(string connStr)
-    {
-        var server = Regex.Match(connStr, @"Server\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
-        var db = Regex.Match(connStr, @"Database\s*=\s*([^;]+)", RegexOptions.IgnoreCase);
-        if (server.Success && db.Success)
-            return $"{server.Groups[1].Value.Trim()}/{db.Groups[1].Value.Trim()}";
-        return connStr.Length > 60 ? connStr[..57] + "..." : connStr;
-    }
-
     public static void Render(string sourceName, string destName, List<DiffResult> results)
     {
-        var shortSource = ShortenConnectionString(sourceName);
-        var shortDest = ShortenConnectionString(destName);
-
         AnsiConsole.WriteLine();
         AnsiConsole.Write(new Rule($"[bold]CDC Migration Diff[/]").LeftJustified());
-        AnsiConsole.MarkupLine($"  [dim]Source:[/]  {Markup.Escape(shortSource)}");
-        AnsiConsole.MarkupLine($"  [dim]Dest:[/]    {Markup.Escape(shortDest)}");
+        AnsiConsole.MarkupLine($"  [dim]Source:[/]  {Markup.Escape(sourceName)}");
+        AnsiConsole.MarkupLine($"  [dim]Dest:[/]    {Markup.Escape(destName)}");
         AnsiConsole.WriteLine();
 
         if (results.Count == 0)
