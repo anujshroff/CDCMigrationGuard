@@ -16,7 +16,7 @@ public partial class DatabaseFixture : IAsyncLifetime
 
     private const string DatabaseName = "CdcTestDb";
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _sourceContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
         _destinationContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
@@ -55,7 +55,7 @@ public partial class DatabaseFixture : IAsyncLifetime
         return builder.ConnectionString;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await Task.WhenAll(
             _sourceContainer.DisposeAsync().AsTask(),
