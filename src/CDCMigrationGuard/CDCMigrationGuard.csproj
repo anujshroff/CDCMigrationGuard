@@ -26,7 +26,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageReference Include="Spectre.Console" Version="0.54.0" />
-    <PackageReference Include="System.CommandLine" Version="2.0.3" />
+    <PackageReference Include="System.CommandLine" Version="2.0.4" />
   </ItemGroup>
 
 </Project>
