@@ -47,7 +47,7 @@ runs:
       shell: bash
 
     - name: Azure Login
-      uses: azure/login@v2
+      uses: azure/login@v3
       with:
         client-id: ${{ inputs.AZURE_CLIENT_ID }}
         tenant-id: ${{ inputs.AZURE_TENANT_ID }}
@@ -88,7 +88,7 @@ runs:
       shell: bash
 
     - name: Upload Signing Certificate
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: signing-certificate
         path: signing-cert.cer
