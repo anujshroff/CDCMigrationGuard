@@ -108,9 +108,15 @@ runs:
         sleep 300
       shell: bash
 
+    - name: NuGet Login
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: anujshroff
+
     - name: Nuget Push
       run: |
-          dotnet nuget push ${{ inputs.NUGET_DIRECTORY }}/*.nupkg --source "https://api.nuget.org/v3/index.json" --api-key ${{ inputs.NUGET_API_KEY }}
+          dotnet nuget push ${{ inputs.NUGET_DIRECTORY }}/*.nupkg --source "https://api.nuget.org/v3/index.json" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
       shell: bash
 
     - name: Push Git Tag
