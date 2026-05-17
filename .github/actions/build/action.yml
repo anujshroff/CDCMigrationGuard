@@ -7,8 +7,6 @@ inputs:
   DOTNET_CORE_VERSION: 
     required: false
     default: '10.x'
-  NUGET_API_KEY:
-    required: true
   AZURE_CLIENT_ID:
     required: true
   AZURE_TENANT_ID:
