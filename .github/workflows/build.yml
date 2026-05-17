@@ -26,7 +26,6 @@ jobs:
       - uses: ./.github/actions/build/
         name: Build
         with:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
