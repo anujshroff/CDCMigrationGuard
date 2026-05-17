@@ -41,11 +41,6 @@ runs:
       run: dotnet build --configuration ${{ inputs.CONFIGURATION }} -p:Version=${{ steps.nextversion.outputs.VERSION }} -p:AssemblyVersion=${{ steps.nextversion.outputs.ASSEMBLYSEMVER }}
       shell: bash
 
-    - name: Nuget Pack
-      run: |
-          dotnet pack --no-build --no-restore -p:PackageVersion=${{ steps.nextversion.outputs.VERSION }} --configuration ${{ inputs.CONFIGURATION }} --output ${{ inputs.NUGET_DIRECTORY }}
-      shell: bash
-
     - name: Azure Login
       uses: azure/login@v3
       with:
@@ -55,6 +50,20 @@ runs:
 
     - name: Install Sign CLI
       run: dotnet tool install --global sign --prerelease
+      shell: bash
+
+    - name: Sign CDCMigrationGuard.dll
+      run: |
+        sign code artifact-signing `
+          -ase "${{ inputs.TRUSTED_SIGNING_ENDPOINT }}" `
+          -asa "${{ inputs.TRUSTED_SIGNING_ACCOUNT }}" `
+          -ascp "${{ inputs.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}" `
+          src/CDCMigrationGuard/bin/${{ inputs.CONFIGURATION }}/net10.0/CDCMigrationGuard.dll
+      shell: pwsh
+
+    - name: Nuget Pack
+      run: |
+          dotnet pack --no-build --no-restore -p:PackageVersion=${{ steps.nextversion.outputs.VERSION }} --configuration ${{ inputs.CONFIGURATION }} --output ${{ inputs.NUGET_DIRECTORY }}
       shell: bash
 
     - name: Sign NuGet Package
