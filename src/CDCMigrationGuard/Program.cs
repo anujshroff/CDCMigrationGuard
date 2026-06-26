@@ -1,5 +1,8 @@
+using AnujShroff.CDCMigrationGuard;
 using AnujShroff.CDCMigrationGuard.Commands;
 using System.CommandLine;
+
+var updateCheckTask = UpdateChecker.CheckAsync();
 
 // --- compare command ---
 var sourceArg = new Argument<string>("source") { Description = "Source connection string" };
@@ -42,4 +45,6 @@ var root = new RootCommand("CDC Migration Diff Tool — detect CDC issues before
 };
 
 var parseResult = root.Parse(args);
-return await parseResult.InvokeAsync();
+int exitCode = await parseResult.InvokeAsync();
+await UpdateChecker.PrintBannerIfAvailable(updateCheckTask);
+return exitCode;

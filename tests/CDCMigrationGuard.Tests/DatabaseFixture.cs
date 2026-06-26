@@ -18,8 +18,8 @@ public partial class DatabaseFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _sourceContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
-        _destinationContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+        _sourceContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest").Build();
+        _destinationContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2025-latest").Build();
 
         await Task.WhenAll(
             _sourceContainer.StartAsync(),

@@ -125,6 +125,28 @@ cdcmigrationguard compare "Server=source.database.windows.net;Database=db;Authen
 | 1 | Errors or warnings detected |
 | 2 | Critical issues found; migration will likely fail |
 
+## Updating
+
+On every run, the tool checks NuGet for a newer published version. If one is available, it prints a banner at the end of execution telling you to run:
+
+```bash
+dotnet tool update --global AnujShroff.CDCMigrationGuard
+```
+
+The check is non-blocking, fails silently on network errors, and skips prereleases. There is no opt-out flag — the check is cheap and runs in the background while the comparison proceeds.
+
+To see the installed version, use the standard dotnet tools command:
+
+```bash
+dotnet tool list --global
+```
+
+To uninstall:
+
+```bash
+dotnet tool uninstall --global AnujShroff.CDCMigrationGuard
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
