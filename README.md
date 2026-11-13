@@ -31,7 +31,7 @@ A .NET CLI tool that validates SQL Server schema migrations against CDC (Change 
 
 ## Technologies
 
-- **.NET 10.0** - Target framework
+- **.NET 11.0** - Target framework
 - **Microsoft.Data.SqlClient** - SQL Server database access
 - **Spectre.Console** - Rich console output with tables and colors
 - **System.CommandLine** - CLI argument and option parsing
@@ -55,7 +55,7 @@ dotnet tool install AnujShroff.CDCMigrationGuard
 
 ## Prerequisites
 
-- **.NET 10.0 SDK**
+- **.NET 11.0 SDK**
 - **SQL Server** with CDC enabled on the destination database
 
 ## Building from Source
